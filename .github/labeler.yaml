@@ -1,0 +1,8 @@
+---
+area/github:
+  - ".github/**/*"
+  - ".gitignore"
+area/README-update:
+  - "**/README.md"
+area/cri-purge:
+  - "cri-purge.sh"
