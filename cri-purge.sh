@@ -15,14 +15,13 @@
 #           This script requires root permissions to access the CRICTL binary.
 #          
 AUTHOR="Richard J. Durso"
-RELDATE="10/11/2022"
-VERSION="0.03"
+RELDATE="06/10/2023"
+VERSION="0.04"
 #############################################################################
 
 ###[ Define Variables ]#######################################################
 CRI_CMD="crictl"
-# Location of image store to calculate disk space freed (before / after)
-IMAGE_STORE="/var/lib/containerd/"
+
 # Skip images with these tags, let human deal with them
 SKIP_THESE_TAGS="<none> latest"
 
@@ -47,6 +46,17 @@ __usage() {
   "
 }
 
+###[ Determine ContainerD Location]##########################################
+# This will parse output of CRICTL INFO looking for containerdRootDir to try
+# to determine where to calculate disk space differences before and after a
+# image purge.
+
+__determine_containerd_root_dir() {
+  IMAGE_STORE=$(${CRI_CMD} info | awk -F'"' '/containerdRootDir/{print $4}')
+
+  [ ! -d "${IMAGE_STORE}" ] && echo "NOTE: Unable to determine containerd root directory!";echo
+}
+
 ###[ Generate Image List ]###################################################
 # This will load a list of currently cached images that were previously
 # downloaded and store this in array CRI_IMAGES. Images with TAGs defined
@@ -64,6 +74,9 @@ __usage() {
 # docker.io/library/traefik                                  2.8.7                  e3d8309b974e3       33.3MB
 
 __generate_image_list() {
+
+  __determine_containerd_root_dir
+
   # load list of images / filter out header line / version sort on 60th char of line
   CRI_IMAGES=$(${CRI_CMD} images | tail -n +2 | sort -k 1.60 -V)
 
@@ -149,7 +162,6 @@ fi
 if [ $(id -u) -ne 0 ]; then
   echo
   echo "* ERROR: ROOT privilege required to access CRICTL binaries."
-  echo
   __usage
   exit 1
 fi
@@ -172,11 +184,11 @@ if [ "$#" -ne 0 ]; then
       exit 0
       ;;
     -p|--purge)
-      START_DISK_SPACE=$(du -ab ${IMAGE_STORE} | sort -n -r | head -1 | awk '{ print $1 }')
+      [ -d "${IMAGE_STORE}" ] && START_DISK_SPACE=$(du -ab ${IMAGE_STORE} | sort -n -r | head -1 | awk '{ print $1 }')
       __process_images PURGE
-      END_DISK_SPACE=$(du -ab ${IMAGE_STORE} | sort -n -r | head -1 | awk '{ print $1 }')
+      [ -d "${IMAGE_STORE}" ] && END_DISK_SPACE=$(du -ab ${IMAGE_STORE} | sort -n -r | head -1 | awk '{ print $1 }')
       echo
-      echo Disk Space Change: $(numfmt --to iec --format "%8.4f" $((START_DISK_SPACE-END_DISK_SPACE)) )
+      [ -d "${IMAGE_STORE}" ] && echo Disk Space Change: $(numfmt --to iec --format "%8.4f" $((START_DISK_SPACE-END_DISK_SPACE)) )
       exit 0
       ;;
     -s|--show-skipped)
