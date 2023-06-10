@@ -16,7 +16,7 @@
 #          
 AUTHOR="Richard J. Durso"
 RELDATE="06/10/2023"
-VERSION="0.06"
+VERSION="0.07"
 #############################################################################
 
 ###[ Define Variables ]#######################################################
@@ -83,7 +83,7 @@ __generate_image_list() {
   # Filter out TAGS to SKIP
   for TAG in ${SKIP_THESE_TAGS};
   do
-    if [ $(echo "${CRI_IMAGES}" | grep -c "${TAG}") -ne 0 ]; then
+    if [ "$(echo "${CRI_IMAGES}" | grep -c "${TAG}")" -ne 0 ]; then
       echo "NOTE: Skipping Images with Tag: ${TAG}"
       echo "${CRI_IMAGES}" | grep "${TAG}"
       CRI_IMAGES=$(echo "${CRI_IMAGES}" | grep -v "${TAG}") 
@@ -91,7 +91,7 @@ __generate_image_list() {
     fi
   done
 
-  TOTAL_CRI_IMAGES=$(echo -n "${CRI_IMAGES}" | grep -c '^')
+  TOTAL_CRI_IMAGES="$(echo -n "${CRI_IMAGES}" | grep -c '^')"
 
   # Reduce raw image list to unique names (without version)
   UNIQUE_CRI_IMAGE_NAMES=$(echo "${CRI_IMAGES}" | awk '{ print $1 }' | sort -u)
@@ -121,7 +121,7 @@ __process_images() {
     echo -n "${COUNT} / ${TOTAL_UNIQUE_IMAGE_NAMES} : Image: ${IMAGE_NAME}"
 
     # Find all versions of this IMAGE_NAME
-    IFS=$'\n';IMAGES=( $(echo "${CRI_IMAGES}" | grep "${IMAGE_NAME}") )
+    mapfile -t IMAGES <<< "$(echo "${CRI_IMAGES}" | grep "${IMAGE_NAME}")"
     NUM_IMAGES=${#IMAGES[@]}
 
     # If only 1 version detected, keep it.
