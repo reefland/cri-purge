@@ -16,7 +16,7 @@
 #          
 AUTHOR="Richard J. Durso"
 RELDATE="06/10/2023"
-VERSION="0.04"
+VERSION="0.05"
 #############################################################################
 
 ###[ Define Variables ]#######################################################
@@ -28,13 +28,15 @@ SKIP_THESE_TAGS="<none> latest"
 ###[ Routines ]##############################################################
 __usage() {
   echo "
-  cri-purge: List and Purge downloaded cached images from containerd. Ver: ${VERSION}
+  cri-purge | Version: ${VERSION} | ${RELDATE} | ${AUTHOR}
+  
+  List and Purge downloaded cached images from containerd. 
   -----------------------------------------------------------------------------
 
   This script requires sudo access to CRICTL binary to obtain a list of cached
   downloaded images and remove specific older images. It will do best effort to
   honor semantic versioning always leaving the newest version of the downloaded
-  image and only delete previous version(s). 
+  image and only purge previous version(s). 
 
   -h, --help          : This usage statement.
   -l, --list          : List cached images and which could be purged.
@@ -75,18 +77,16 @@ __determine_containerd_root_dir() {
 
 __generate_image_list() {
 
-  __determine_containerd_root_dir
-
   # load list of images / filter out header line / version sort on 60th char of line
   CRI_IMAGES=$(${CRI_CMD} images | tail -n +2 | sort -k 1.60 -V)
 
   # Filter out TAGS to SKIP
   for TAG in ${SKIP_THESE_TAGS};
   do
-    if [ $(echo "${CRI_IMAGES}" | grep -c ${TAG}) -ne 0 ]; then
+    if [ $(echo "${CRI_IMAGES}" | grep -c "${TAG}") -ne 0 ]; then
       echo "NOTE: Skipping Images with Tag: ${TAG}"
-      echo "${CRI_IMAGES}" | grep ${TAG}
-      CRI_IMAGES=$(echo "${CRI_IMAGES}" | grep -v ${TAG}) 
+      echo "${CRI_IMAGES}" | grep "${TAG}"
+      CRI_IMAGES=$(echo "${CRI_IMAGES}" | grep -v "${TAG}") 
       echo
     fi
   done
@@ -115,13 +115,13 @@ __process_images() {
   echo "Total Images: ${TOTAL_CRI_IMAGES} Unique Images Names: ${TOTAL_UNIQUE_IMAGE_NAMES}"
   echo
   COUNT=0
-  for IMAGE_NAME in ${UNIQUE_CRI_IMAGE_NAMES};
+  for IMAGE_NAME in ${UNIQUE_CRI_IMAGE_NAMES}; # Do not quote UNIQUE_CRI_IMAGE_NAMES, breaks for loop
   do
     ((COUNT=COUNT+1))
     echo -n "${COUNT} / ${TOTAL_UNIQUE_IMAGE_NAMES} : Image: ${IMAGE_NAME}"
 
     # Find all versions of this IMAGE_NAME
-    IFS=$'\n';IMAGES=( $(echo "${CRI_IMAGES}" | grep ${IMAGE_NAME}) )
+    IFS=$'\n';IMAGES=( $(echo "${CRI_IMAGES}" | grep "${IMAGE_NAME}") )
     NUM_IMAGES=${#IMAGES[@]}
 
     # If only 1 version detected, keep it.
@@ -135,12 +135,12 @@ __process_images() {
       do
         # Remove image if $1 == "PURGE"
         if [ "${1^^}" == "PURGE" ]; then
-          echo - Purge TAG: $( echo ${IMAGES[$i]} | awk '{ printf "%s (%s)\n", $2, $4 }')
+          echo - Purge TAG: $( echo "${IMAGES[$i]}" | awk '{ printf "%s (%s)\n", $2, $4 }')
 
           # Remove the Specific Image:TAG
-          ${CRI_CMD} rmi $(echo ${IMAGES[$i]} |awk '{ printf "%s:%s\n", $1, $2 }') > /dev/null 2>&1
+          ${CRI_CMD} rmi $(echo "${IMAGES[$i]}" |awk '{ printf "%s:%s\n", $1, $2 }') > /dev/null 2>&1
         else
-          echo - Purgeable TAG: $( echo ${IMAGES[$i]} | awk '{ printf "%s (%s)\n", $2, $4 }')
+          echo - Purgeable TAG: $( echo "${IMAGES[$i]}" | awk '{ printf "%s (%s)\n", $2, $4 }')
         fi
       done
       echo
@@ -159,12 +159,14 @@ if ! command -v ${CRI_CMD} >/dev/null 2>&1; then
 fi
 
 # Confirm sudo or root equivilant access
-if [ $(id -u) -ne 0 ]; then
+if [ "$(id -u)" -ne 0 ]; then
   echo
   echo "* ERROR: ROOT privilege required to access CRICTL binaries."
   __usage
   exit 1
 fi
+
+__determine_containerd_root_dir
 
 # Process argument list
 if [ "$#" -ne 0 ]; then
@@ -184,9 +186,9 @@ if [ "$#" -ne 0 ]; then
       exit 0
       ;;
     -p|--purge)
-      [ -d "${IMAGE_STORE}" ] && START_DISK_SPACE=$(du -ab ${IMAGE_STORE} | sort -n -r | head -1 | awk '{ print $1 }')
+      [ -d "${IMAGE_STORE}" ] && START_DISK_SPACE=$(du -ab "${IMAGE_STORE}" | sort -n -r | head -1 | awk '{ print $1 }')
       __process_images PURGE
-      [ -d "${IMAGE_STORE}" ] && END_DISK_SPACE=$(du -ab ${IMAGE_STORE} | sort -n -r | head -1 | awk '{ print $1 }')
+      [ -d "${IMAGE_STORE}" ] && END_DISK_SPACE=$(du -ab "${IMAGE_STORE}" | sort -n -r | head -1 | awk '{ print $1 }')
       echo
       [ -d "${IMAGE_STORE}" ] && echo Disk Space Change: $(numfmt --to iec --format "%8.4f" $((START_DISK_SPACE-END_DISK_SPACE)) )
       exit 0
