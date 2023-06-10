@@ -16,7 +16,7 @@
 #          
 AUTHOR="Richard J. Durso"
 RELDATE="06/10/2023"
-VERSION="0.05"
+VERSION="0.06"
 #############################################################################
 
 ###[ Define Variables ]#######################################################
@@ -126,7 +126,7 @@ __process_images() {
 
     # If only 1 version detected, keep it.
     if [[ ${NUM_IMAGES} -eq 1 ]]; then
-      echo " - Keep TAG: $(echo ${IMAGES} | awk '{ printf "%s (%s)\n", $2, $4 }')"
+      echo " - Keep TAG: $(echo "${IMAGES[0]}" | awk '{ printf "%s (%s)\n", $2, $4 }')"
     else
       # print last line of the array, should be one to keep.
       echo " - Keep TAG: $(printf %s\\n "${IMAGES[@]: -1}"| awk '{ printf "%s (%s)\n", $2, $4 }')"
@@ -135,12 +135,12 @@ __process_images() {
       do
         # Remove image if $1 == "PURGE"
         if [ "${1^^}" == "PURGE" ]; then
-          echo - Purge TAG: $( echo "${IMAGES[$i]}" | awk '{ printf "%s (%s)\n", $2, $4 }')
+          echo "- Purge TAG: $( echo "${IMAGES[$i]}" | awk '{ printf "%s (%s)\n", $2, $4 }')"
 
           # Remove the Specific Image:TAG
-          ${CRI_CMD} rmi $(echo "${IMAGES[$i]}" |awk '{ printf "%s:%s\n", $1, $2 }') > /dev/null 2>&1
+          ${CRI_CMD} rmi "$(echo "${IMAGES[$i]}" |awk '{ printf "%s:%s\n", $1, $2 }')" > /dev/null 2>&1
         else
-          echo - Purgeable TAG: $( echo "${IMAGES[$i]}" | awk '{ printf "%s (%s)\n", $2, $4 }')
+          echo "- Purgeable TAG: $( echo "${IMAGES[$i]}" | awk '{ printf "%s (%s)\n", $2, $4 }')"
         fi
       done
       echo
@@ -190,7 +190,7 @@ if [ "$#" -ne 0 ]; then
       __process_images PURGE
       [ -d "${IMAGE_STORE}" ] && END_DISK_SPACE=$(du -ab "${IMAGE_STORE}" | sort -n -r | head -1 | awk '{ print $1 }')
       echo
-      [ -d "${IMAGE_STORE}" ] && echo Disk Space Change: $(numfmt --to iec --format "%8.4f" $((START_DISK_SPACE-END_DISK_SPACE)) )
+      [ -d "${IMAGE_STORE}" ] && echo Disk Space Change: "$(numfmt --to iec --format "%8.4f" $((START_DISK_SPACE-END_DISK_SPACE)) )"
       exit 0
       ;;
     -s|--show-skipped)
