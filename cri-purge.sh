@@ -112,6 +112,17 @@ __generate_image_list() {
 # If $1 is "PURGE" then this routine will act and purge specific image(s), any
 # other value will just display of a list of images that could be purged.
 
+__get_tag_ref() {
+  local result=""
+  # Get tag reference from an item (if <none>, use its hash instead)
+  if [ "$(echo "${IMAGES[@]: -$1}" | awk '{ print $2 }')" = "<none>" ]; then
+    result="\$3"
+  else
+    result="\$2"
+  fi
+  echo $result
+}
+
 __process_images() {
   # Create Image List to Process
   __generate_image_list
@@ -131,21 +142,28 @@ __process_images() {
 
     # If only 1 version detected, keep it.
     if [[ ${NUM_IMAGES} -eq 1 ]]; then
-      echo " - Keep TAG: $(echo "${IMAGES[0]}" | awk '{ printf "%s (%s)\n", $2, $4 }')"
+      TAG_REF=$(__get_tag_ref 0)
+      echo " - Keep TAG: $(echo "${IMAGES[0]}" | awk "{ printf \"%s (%s)\n\", $TAG_REF, \$4 }")"
     else
       # print last line of the array, should be one to keep.
-      echo " - Keep TAG: $(printf %s\\n "${IMAGES[@]: -1}"| awk '{ printf "%s (%s)\n", $2, $4 }')"
+      TAG_REF=$(__get_tag_ref 1)
+      echo " - Keep TAG: $(printf %s\\n "${IMAGES[@]: -1}"| awk "{ printf \"%s (%s)\n\", $TAG_REF, \$4 }")"
 
       for (( i=0; i<$(( ${#IMAGES[@]}-1 )); i++ )) 
       do
         # Remove image if $1 == "PURGE"
+        TAG_REF=$(__get_tag_ref $i)
         if [ "${1^^}" == "PURGE" ]; then
-          echo "- Purge TAG: $( echo "${IMAGES[$i]}" | awk '{ printf "%s (%s)\n", $2, $4 }')"
+          echo "- Purge TAG: $( echo "${IMAGES[$i]}" | awk "{ printf \"%s (%s)\n\", $TAG_REF, \$4 }")"
 
-          # Remove the Specific Image:TAG
-          ${CRI_CMD} rmi "$(echo "${IMAGES[$i]}" |awk '{ printf "%s:%s\n", $1, $2 }')" > /dev/null 2>&1
+          # Remove the Specific Image:TAG, or by a hash (if tag=<none>)
+          if [ "$TAG_REF" = "\$3" ]; then
+            ${CRI_CMD} rmi "$(echo "${IMAGES[$i]}" |awk '{ printf "%s\n", $3 }')" > /dev/null 2>&1
+          else
+            ${CRI_CMD} rmi "$(echo "${IMAGES[$i]}" |awk '{ printf "%s:%s\n", $1, $2 }')" > /dev/null 2>&1
+          fi
         else
-          echo "- Purgeable TAG: $( echo "${IMAGES[$i]}" | awk '{ printf "%s (%s)\n", $2, $4 }')"
+          echo "- Purgeable TAG: $( echo "${IMAGES[$i]}" | awk "{ printf \"%s (%s)\n\", $TAG_REF, \$4 }")"
         fi
       done
       echo
