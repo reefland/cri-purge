@@ -23,8 +23,9 @@ VERSION="0.07"
 CRI_CMD="crictl"
 CRIINFO_CMD="crio-status"
 
-# Skip images with these tags, let human deal with them
-SKIP_THESE_TAGS="<none> latest"
+# Skip images with these tags, let human deal with them, for example:
+# SKIP_THESE_TAGS="<none> latest"
+SKIP_THESE_TAGS="^\S+\s+[\w-_\.\d]+\s+"
 
 ###[ Routines ]##############################################################
 __usage() {
@@ -80,24 +81,26 @@ __determine_containerd_root_dir() {
 __generate_image_list() {
 
   # load list of images / filter out header line / version sort on 60th char of line
-  CRI_IMAGES=$(${CRI_CMD} images | tail -n +2 | sort -k 1.60 -V)
+  ${CRI_CMD} images | tail -n +2 | sort -k 1.60 -V > /tmp/CRI_IMAGES
 
   # Filter out TAGS to SKIP
   for TAG in ${SKIP_THESE_TAGS};
   do
-    if [ "$(echo "${CRI_IMAGES}" | grep -c "${TAG}")" -ne 0 ]; then
-      echo "NOTE: Skipping Images with Tag: ${TAG}"
-      echo "${CRI_IMAGES}" | grep "${TAG}"
-      CRI_IMAGES=$(echo "${CRI_IMAGES}" | grep -v "${TAG}") 
+    grep -oP "${TAG}" /tmp/CRI_IMAGES > /tmp/CRI_IMAGES_SKIP
+    if [ $(grep -c '^' /tmp/CRI_IMAGES_SKIP) -ne 0 ]; then
+      echo "NOTE: Skipping Images with Tag:"
+      cat /tmp/CRI_IMAGES_SKIP
+      grep -vP "${TAG}" /tmp/CRI_IMAGES > /tmp/CRI_IMAGES_
+      mv -f /tmp/CRI_IMAGES_ /tmp/CRI_IMAGES
       echo
     fi
   done
 
-  TOTAL_CRI_IMAGES="$(echo -n "${CRI_IMAGES}" | grep -c '^')"
+  TOTAL_CRI_IMAGES=$(grep -c '^' /tmp/CRI_IMAGES)
 
   # Reduce raw image list to unique names (without version)
-  UNIQUE_CRI_IMAGE_NAMES=$(echo "${CRI_IMAGES}" | awk '{ print $1 }' | sort -u)
-  TOTAL_UNIQUE_IMAGE_NAMES=$(echo -n "${UNIQUE_CRI_IMAGE_NAMES}" | grep -c '^')
+  awk '{ print $1 }' /tmp/CRI_IMAGES | sort -u > /tmp/UNIQUE_CRI_IMAGE_NAMES
+  TOTAL_UNIQUE_IMAGE_NAMES=$(grep -c '^' /tmp/UNIQUE_CRI_IMAGE_NAMES)
 }
 
 ###[ Process Image List ]#####################################################
@@ -117,13 +120,13 @@ __process_images() {
   echo "Total Images: ${TOTAL_CRI_IMAGES} Unique Images Names: ${TOTAL_UNIQUE_IMAGE_NAMES}"
   echo
   COUNT=0
-  for IMAGE_NAME in ${UNIQUE_CRI_IMAGE_NAMES}; # Do not quote UNIQUE_CRI_IMAGE_NAMES, breaks for loop
+  while read IMAGE_NAME; # Do not quote UNIQUE_CRI_IMAGE_NAMES, breaks for loop
   do
     ((COUNT=COUNT+1))
     echo -n "${COUNT} / ${TOTAL_UNIQUE_IMAGE_NAMES} : Image: ${IMAGE_NAME}"
 
     # Find all versions of this IMAGE_NAME
-    mapfile -t IMAGES <<< "$(echo "${CRI_IMAGES}" | grep "${IMAGE_NAME}")"
+    mapfile -t IMAGES <<< "$(grep "${IMAGE_NAME}" /tmp/CRI_IMAGES)"
     NUM_IMAGES=${#IMAGES[@]}
 
     # If only 1 version detected, keep it.
@@ -147,7 +150,7 @@ __process_images() {
       done
       echo
     fi
-  done
+  done < /tmp/UNIQUE_CRI_IMAGE_NAMES
 }
 
 ###[ Main Section ]##########################################################
