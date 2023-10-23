@@ -21,6 +21,7 @@ VERSION="0.07"
 
 ###[ Define Variables ]#######################################################
 CRI_CMD="crictl"
+CRIINFO_CMD="crio-status"
 
 # Skip images with these tags, let human deal with them
 SKIP_THESE_TAGS="<none> latest"
@@ -56,6 +57,7 @@ __usage() {
 __determine_containerd_root_dir() {
   IMAGE_STORE=$(${CRI_CMD} info | awk -F'"' '/containerdRootDir/{print $4}')
 
+  [ -z "${IMAGE_STORE}" ] && IMAGE_STORE=$(crio-status info | awk -F'storage root: ' '/storage root:/ {print $2}')
   [ ! -d "${IMAGE_STORE}" ] && echo "NOTE: Unable to determine containerd root directory!";echo
 }
 
@@ -151,9 +153,9 @@ __process_images() {
 ###[ Main Section ]##########################################################
 
 # Confirm crictl is installed
-if ! command -v ${CRI_CMD} >/dev/null 2>&1; then
+if ! command -v ${CRI_CMD} >/dev/null 2>&1 || ! command -v ${CRIINFO_CMD} >/dev/null 2>&1 ; then
   echo
-  echo "* ERROR: crictl command not found, install missing application or update script variable CRI_CMD"
+  echo "* ERROR: $CRI_CMD/$CRIINFO_CMD commands not found, install missing application or update script variable CRI_CMD/CRIINFO_CMD"
   echo
   exit 2
 fi
