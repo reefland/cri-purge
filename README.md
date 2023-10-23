@@ -4,7 +4,11 @@ CRI Purge, is a BASH script I wrote to help cleanup disk space of cached Kuberne
 
 * `cri-purge.sh` will process each image's list of cached versions in a best effort to determine semantic version from oldest to newest (v1.7.1, v1.8.0, v1.8.1, v1.8.2, v1.9.0) with the goal to determine and retain only the newest cached version downloaded -- Keeping the image most likely to be needed on pod restart.
 
-* Specific tags can be defined for images to skip (do not purge).  By default the two image tags that will not be purged are `<none>` and `latest` neither of which are version specific.
+* Specific tags can be defined for images to skip (do not purge).  By default the semver-ish and just arbitrary named, including `latest`, image tags that will not be purged.
+
+* Following examples of versioned tags are skipped/ignored (not deleted): `latest`, `asdknxcZ12218aaaksl`, `2023-10-29.ref123-hashxxx`, `v1.2.4`.
+
+* Tags `<none>` (dangling) will be purged. If all tags look like that, at least one of them will be retained for an image.
 
 * `cri-purge.sh` makes no attempt to determine if the cached images are still deployed. If you have uninstalled an application, its cached image may still be retained. `cri-purge.sh` job is just to determine the latest of whatever is currently cached, keep the latest and purge the older version(s).
 
@@ -21,33 +25,33 @@ Lastly, not all containers use semantic versioning.  Worst case, if `cri-purge.s
 ## Installation
 
 ```text
-git clone https://github.com/reefland/cri-purge
-
-chmod 775 cri-purge.sh
+$ curl -LO https://raw.githubusercontent.com/bogdando/cri-purge/master/cri-purge.sh
+$ sudo install -o root -g root -m 0755 cri-purge.sh  /usr/local/sbin/cri-purge
 ```
 
 ### Usage
 
 ```shell
-$ ./cri-purge.sh 
+$ cri-purge
 
 * ERROR: ROOT privilege required to access CRICTL binaries.
 
-  cri-purge: List and Purge downloaded cached images from containerd. Ver: 0.03
+  cri-purge | Version: 0.07 | 06/10/2023 | Richard J. Durso
+  
+  List and Purge downloaded cached images from containerd. 
   -----------------------------------------------------------------------------
 
   This script requires sudo access to CRICTL binary to obtain a list of cached
   downloaded images and remove specific older images. It will do best effort to
   honor semantic versioning always leaving the newest version of the downloaded
-  image and only delete previous version(s). 
+  image and only purge previous version(s). 
 
   -h, --help          : This usage statement.
   -l, --list          : List cached images and which could be purged.
   -p, --purge         : List cached images and PURGE/PRUNE older images.
   -s, --show-skipped  : List images to be skipped (humans to clean up)
 
-  Following version tags are skipped/ignored (not deleted): <none> latest
-```
+  Following version tags are skipped/ignored (not deleted): ^\S+\s+[\w-_\.\d]+\s+```
 
 ---
 
@@ -67,7 +71,7 @@ I still use the `cri-purge.sh` script to review which images are cached and manu
 ### To `list` Cached Images
 
 ```shell
-sudo ./cri-purge.sh --list
+$ sudo cri-purge --list
 ```
 
 The output will show the Total Images cached (all versions) and Unique Images Names cached:
@@ -101,7 +105,7 @@ Images that do not have older versions to purge will simply list the current ver
 ### To `purge` Cached Images
 
 ```shell
-sudo ./cri-purge.sh --purge
+$ sudo cri-purge --purge
 ```
 
 The output will look much the same as `list` however, this time it will indicate the version tag(s) PURGED:
@@ -121,3 +125,41 @@ At the end `cri-purge.sh` tries to estimate how much disk space was cleaned up:
 ```text
 Disk Space Change:  9.7790G
 ```
+
+## Using it with OpenShift (Code Ready Containers)
+
+The steps below have been verified on OpenShift CRC 4.13 on RedHat CoreOS:
+```
+CRC version: 2.27.0+71615e
+OpenShift version: 4.13.12
+Podman version: 4.4.4
+```
+
+Snapshot the CRC VM:
+
+```bash
+$ sudo virsh --connect=qemu:///system detach-device-alias crc fs0 --live
+$ sleep 3
+$ sudo virsh --connect=qemu:///system snapshot-create-as --atomic --domain crc --name backup
+```
+
+Log-in to the CRC host:
+
+```shell
+$ ssh -F/dev/null -i ~/.crc/machines/crc/id_ecdsa core@192.168.130.11
+```
+
+Install the script utility as described above. Then purge unversioned (dangling) images:
+
+```shell
+$ sudo cri-purge --purge
+```
+
+Shutdown the CRC vm, free up the released disk space, then start it back:
+
+```shell
+$ crc stop
+$ sudo virt-sparsify --in-place ~/.crc/machines/crc/crc.qcow2
+$ crc start
+```
+
